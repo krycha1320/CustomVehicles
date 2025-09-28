@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y g++-multilib cmake make
@@ -23,7 +23,7 @@ jobs:
           make
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: CustomVehicles-linux
           path: build/libCustomVehicles.so
@@ -32,7 +32,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure with CMake (Win32)
         run: cmake -A Win32 -B build
@@ -41,7 +41,7 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: CustomVehicles-windows
           path: build/Release/CustomVehicles.dll
