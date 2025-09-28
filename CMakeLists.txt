@@ -3,23 +3,25 @@ project(CustomVehicles)
 
 set(CMAKE_CXX_STANDARD 11)
 
-# ✅ wymuszamy kompilację 32-bit
+# wymuś 32-bit
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -m32")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
 
-# ✅ nagłówki (tu masz include/amx/amx.h itd.)
+# powiedz plugincommon.h, że budujemy na Linuxie
+add_definitions(-DLINUX)
+
+# katalog z nagłówkami
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-# ✅ źródła pluginu
+# źródła
 add_library(CustomVehicles SHARED
     src/CustomVehicles.cpp
 )
 
-# ✅ poprawne nazwy plików wyjściowych
-# Linux: CustomVehicles.so
-# Windows: CustomVehicles.dll
+# rozszerzenia plików wyjściowych
 set_target_properties(CustomVehicles PROPERTIES PREFIX "" SUFFIX ".so")
 
 if (WIN32)
+    add_definitions(-DWIN32)
     set_target_properties(CustomVehicles PROPERTIES SUFFIX ".dll")
 endif()
