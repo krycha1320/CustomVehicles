@@ -12,10 +12,20 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
 
 # ==============================
+# 🧩 Określenie systemu
+# ==============================
+if (WIN32)
+    add_definitions(-DWIN32)
+elseif(UNIX)
+    add_definitions(-DLINUX)
+endif()
+
+# ==============================
 # 📁 Ścieżki do plików nagłówkowych
 # ==============================
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/include/amx
 )
 
 # ==============================
