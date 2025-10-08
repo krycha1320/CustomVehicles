@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -19,29 +19,27 @@ jobs:
       - name: 🧩 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Install dependencies (Linux only)
+      # Linux - instalacja zależności
+      - name: ⚙️ Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt update
           sudo apt install -y gcc-multilib g++-multilib cmake make
 
-      - name: ⚙️ Install dependencies (Windows only)
+      # Windows - instalacja MinGW i CMake
+      - name: ⚙️ Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
           choco install mingw cmake -y
           echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/bin" >> $GITHUB_PATH
 
-      - name: 🏗️ Configure project
+      # Konfiguracja i build
+      - name: 🏗️ Configure and build project
         run: |
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
 
-      - name: 🧱 Build plugin
-        run: |
-          cd build
-          cmake --build . --config Release
-
+      # Upload plików
       - name: 📦 Upload built plugin
         uses: actions/upload-artifact@v4
         with:
