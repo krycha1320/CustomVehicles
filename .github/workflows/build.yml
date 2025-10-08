@@ -1,0 +1,49 @@
+name: Build CustomVehicles Plugin
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    name: Build on ${{ matrix.os }}
+    steps:
+      - name: 🧩 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Install dependencies (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-multilib g++-multilib cmake make
+
+      - name: ⚙️ Install dependencies (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          choco install mingw cmake -y
+          echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/bin" >> $GITHUB_PATH
+
+      - name: 🏗️ Configure project
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: 🧱 Build plugin
+        run: |
+          cd build
+          cmake --build . --config Release
+
+      - name: 📦 Upload built plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles-${{ matrix.os }}
+          path: plugins/
