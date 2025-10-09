@@ -3,10 +3,11 @@
 // Author: Krycha1320 (Desert Project)
 // ================================================================
 
+// najpierw AMX, potem plugincommon i amxplugin
 #include "amx/amx.h"
-#include "plugin.h"
 #include "plugincommon.h"
 #include "amxplugin.h"
+#include "plugin.h"
 
 #include <string>
 #include <vector>
