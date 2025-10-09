@@ -2,69 +2,43 @@ cmake_minimum_required(VERSION 3.10)
 project(CustomVehicles)
 
 # ==============================
-# ⚙️ Ustawienia kompilatora
+#  Kompilacja 32-bit pluginu
 # ==============================
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_STANDARD 11)
-
-# Wymuszenie 32-bitowej kompilacji
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -fPIC")
 
 # ==============================
-# 🧩 Określenie systemu (dla plugincommon.h)
-# ==============================
-if (WIN32)
-    add_definitions(-DWIN32)
-elseif(UNIX)
-    add_definitions(-DLINUX)
-endif()
-
-# ==============================
-# 📁 Ścieżki do plików nagłówkowych
+#  Ścieżki do nagłówków
 # ==============================
 include_directories(
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/include/amx   # dla kompatybilności z #include "amx/amx.h"
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include/amx
 )
 
 # ==============================
-# 🧱 Pliki źródłowe pluginu
+#  Budowanie pluginu
 # ==============================
 add_library(CustomVehicles SHARED
     src/CustomVehicles.cpp
 )
 
 # ==============================
-# 💾 Nazwa i rozszerzenie zależne od systemu
-# ==============================
-if (WIN32)
-    set_target_properties(CustomVehicles PROPERTIES
-        OUTPUT_NAME "CustomVehicles"
-        SUFFIX ".dll"
-    )
-elseif(UNIX)
-    set_target_properties(CustomVehicles PROPERTIES
-        OUTPUT_NAME "CustomVehicles"
-        SUFFIX ".so"
-    )
-endif()
-
-# ==============================
-# 📂 Folder docelowy dla pluginu
+#  Nazwa wyjściowa (dla Linux)
 # ==============================
 set_target_properties(CustomVehicles PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins"
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins"
+    OUTPUT_NAME "CustomVehicles"
+    PREFIX ""
+    SUFFIX ".so"
 )
 
 # ==============================
-# 🧹 Komunikaty pomocnicze
+#  Dodatkowy build Windows (opcjonalny)
 # ==============================
+if (WIN32)
+    set_target_properties(CustomVehicles PROPERTIES SUFFIX ".dll")
+endif()
+
 message(STATUS "============================================")
-message(STATUS "Building CustomVehicles plugin")
-message(STATUS "Compiler: ${CMAKE_CXX_COMPILER}")
-message(STATUS "Architecture: 32-bit")
-message(STATUS "Output directory: ${PROJECT_SOURCE_DIR}/plugins")
-message(STATUS "Output file: CustomVehicles.dll (Windows) or CustomVehicles.so (Linux)")
-message(STATUS "============================================")
+message(STATUS " Building CustomVehicles plugin")
+message(STATUS " Compiler: ${CMAKE_CXX_COMPILER}")
+message(STATUS " Architecture:
