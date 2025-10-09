@@ -1,16 +1,19 @@
-#include "amx.h"
-#include "plugincommon.h"
-#include "amxplugin.h"
-
+#include "plugin.h"
 #include <string>
 #include <vector>
 #include <fstream>
 
-// Typ do logowania z serwera
-typedef void (*logprintf_t)(const char* format, ...);
-static logprintf_t logprintf = nullptr;
+// =====================================================
+//  Plugin information
+// =====================================================
 
-// Struktura pojazdu
+typedef void (*logprintf_t)(const char* format, ...);
+static logprintf_t logprintf;
+
+// =====================================================
+//  Vehicle struct
+// =====================================================
+
 struct VehicleDef {
     int baseid;
     int newid;
@@ -18,18 +21,18 @@ struct VehicleDef {
     std::string txd;
 };
 
-// Wektor na nowe pojazdy
 static std::vector<VehicleDef> g_Vehicles;
 
 // =====================================================
-// NATYWKA AddVehicleModel
+//  Native: AddVehicleModel(baseid, newid, dff, txd)
 // =====================================================
-static cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
+
+cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
 {
     int baseid = (int)params[1];
     int newid = (int)params[2];
 
-    char* dff, * txd;
+    char* dff; char* txd;
     amx_StrParam(amx, params[3], dff);
     amx_StrParam(amx, params[4], txd);
 
@@ -38,39 +41,41 @@ static cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
     VehicleDef v = { baseid, newid, dff, txd };
     g_Vehicles.push_back(v);
 
-    if (logprintf)
-        logprintf("[CustomVehicles] Registered vehicle ID %d (base %d) with %s/%s",
-            newid, baseid, dff, txd);
+    logprintf("[CustomVehicles] Registered vehicle ID %d (base %d) with %s/%s",
+        newid, baseid, dff, txd);
 
     return 1;
 }
 
 // =====================================================
-// ZAPIS JSON (scriptfiles/vehicles.json)
+//  Save vehicles.json
 // =====================================================
+
 static void SaveVehiclesJSON()
 {
     std::ofstream file("scriptfiles/vehicles.json");
     file << "[\n";
     for (size_t i = 0; i < g_Vehicles.size(); i++) {
-        auto& v = g_Vehicles[i];
+        const auto& v = g_Vehicles[i];
         file << "  { \"newid\": " << v.newid
-            << ", \"baseid\": " << v.baseid
-            << ", \"dff\": \"" << v.dff
-            << "\", \"txd\": \"" << v.txd << "\" }";
+             << ", \"baseid\": " << v.baseid
+             << ", \"dff\": \"" << v.dff
+             << "\", \"txd\": \"" << v.txd << "\" }";
         if (i + 1 < g_Vehicles.size()) file << ",";
         file << "\n";
     }
     file << "]";
     file.close();
 
-    if (logprintf)
-        logprintf("[CustomVehicles] vehicles.json saved with %d entries", (int)g_Vehicles.size());
+    logprintf("[CustomVehicles] vehicles.json saved (%zu entries)", g_Vehicles.size());
 }
 
 // =====================================================
-// FUNKCJE PLUGINU
+//  Plugin Core
 // =====================================================
+
+extern void* pAMXFunctions;
+
 PLUGIN_EXPORT unsigned int PLUGIN_CALL Supports()
 {
     return SUPPORTS_VERSION | SUPPORTS_AMX_NATIVES;
@@ -78,30 +83,34 @@ PLUGIN_EXPORT unsigned int PLUGIN_CALL Supports()
 
 PLUGIN_EXPORT bool PLUGIN_CALL Load(void** ppData)
 {
+    pAMXFunctions = ppData[PLUGIN_DATA_AMX_EXPORTS];
     logprintf = (logprintf_t)ppData[PLUGIN_DATA_LOGPRINTF];
-    logprintf(">> CustomVehicles plugin loaded!");
+
+    logprintf(">> CustomVehicles plugin loaded! (OMP-compatible)");
+
     return true;
 }
 
 PLUGIN_EXPORT void PLUGIN_CALL Unload()
 {
     SaveVehiclesJSON();
-    if (logprintf) logprintf(">> CustomVehicles plugin unloaded!");
+    logprintf(">> CustomVehicles plugin unloaded!");
 }
 
-// Rejestracja natywek
-static AMX_NATIVE_INFO custom_veh_Natives[] =
+AMX_NATIVE_INFO natives[] =
 {
     { "AddVehicleModel", n_AddVehicleModel },
-    { 0, 0 }
+    { NULL, NULL }
 };
 
 PLUGIN_EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
 {
-    return amx_Register(amx, custom_veh_Natives, -1);
+    logprintf(">> CustomVehicles: registering natives...");
+    return amx_Register(amx, natives, -1);
 }
 
 PLUGIN_EXPORT int PLUGIN_CALL AmxUnload(AMX* amx)
 {
+    logprintf(">> CustomVehicles: AMX unloaded.");
     return AMX_ERR_NONE;
 }
