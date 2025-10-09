@@ -38,7 +38,12 @@ if (WIN32)
     set_target_properties(CustomVehicles PROPERTIES SUFFIX ".dll")
 endif()
 
+# ==============================
+#  Informacyjny log kompilacji
+# ==============================
 message(STATUS "============================================")
-message(STATUS " Building CustomVehicles plugin")
-message(STATUS " Compiler: ${CMAKE_CXX_COMPILER}")
-message(STATUS " Architecture:
+message(STATUS "Building CustomVehicles plugin")
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER}")
+message(STATUS "Architecture: 32-bit")
+message(STATUS "Output: ${CMAKE_SOURCE_DIR}/plugins/CustomVehicles.so (Linux) or .dll (Windows)")
+message(STATUS "============================================")
