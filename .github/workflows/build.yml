@@ -1,4 +1,4 @@
-name: Build CustomVehicles (DLL + SO)
+name: Build CustomVehicles (DLL + SO, Debian10 safe)
 
 on:
   push:
@@ -44,15 +44,24 @@ jobs:
             **/CustomVehicles.dll
 
   build-linux:
-    name: Build Linux SO (x86)
+    name: Build Linux SO (Debian10 compatible)
     runs-on: ubuntu-latest
+    container: debian:buster
 
     steps:
+      - name: Fix old Debian sources
+        run: |
+          echo "deb http://archive.debian.org/debian buster main contrib non-free" > /etc/apt/sources.list
+          echo "deb http://archive.debian.org/debian-security buster/updates main contrib non-free" >> /etc/apt/sources.list
+          echo "Acquire::Check-Valid-Until false;" > /etc/apt/apt.conf.d/99ignore-expiry
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y g++ gcc-multilib g++-multilib make findutils
+
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install 32-bit compiler
-        run: sudo apt-get update && sudo apt-get install -y g++-multilib
 
       - name: Create build directory
         run: mkdir -p build
@@ -67,6 +76,7 @@ jobs:
             exit 1
           fi
           g++ -m32 -std=c++17 -fPIC -O2 -static-libgcc -static-libstdc++ \
+              -D_GLIBCXX_USE_CXX11_ABI=0 \
               -shared "$FILE" -o build/CustomVehicles.so
           echo "✅ Build finished: build/CustomVehicles.so"
 
