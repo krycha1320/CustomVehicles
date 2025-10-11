@@ -32,7 +32,8 @@ jobs:
             echo "❌ CustomVehicles.cpp not found!"
             exit 1
           fi
-          g++ -std=c++17 -O2 -shared -static -s "$FILE" -o build/CustomVehicles.dll
+          g++ -std=c++17 -O2 -shared -static -static-libgcc -static-libstdc++ \
+              -s "$FILE" -o build/CustomVehicles.dll
           echo "✅ Build finished: build/CustomVehicles.dll"
 
       - name: Upload artifact (DLL)
@@ -64,7 +65,9 @@ jobs:
             echo "❌ CustomVehicles.cpp not found!"
             exit 1
           fi
-          g++ -m32 -std=c++17 -fPIC -O2 -shared "$FILE" -o build/CustomVehicles.so
+          g++ -m32 -std=c++17 -fPIC -O2 -static-libgcc -static-libstdc++ \
+              -D_GLIBCXX_USE_CXX11_ABI=0 \
+              -shared "$FILE" -o build/CustomVehicles.so
           echo "✅ Build finished: build/CustomVehicles.so"
 
       - name: Upload artifact (SO)
