@@ -20,7 +20,7 @@
 #endif
 
 // ==========================================================
-// Minimal AMX / plugin defs (zgodne z PAWN/open.mp/SA:MP)
+// Minimal AMX / plugin defs (zgodne z PAWN / SA:MP / Open.MP)
 // ==========================================================
 typedef unsigned int cell;
 typedef void* AMX;
@@ -46,7 +46,7 @@ enum PLUGIN_DATA {
 
 struct AMX_NATIVE_INFO { const char* name; cell (AMX_NATIVE_CALL *func)(AMX*, cell*); };
 
-// AMX exports – minimalny podzbiór z amx.h (ważne: indeksy!)
+// AMX exports – minimalny podzbiór z amx.h
 enum AMX_EXPORT {
     AMX_EXPORT_Align = 0,
     AMX_EXPORT_Callback,
@@ -73,7 +73,7 @@ enum AMX_EXPORT {
     AMX_EXPORT_PushArray,
     AMX_EXPORT_PushString,
     AMX_EXPORT_RaiseError,
-    AMX_EXPORT_Register,      // <— to nas interesuje
+    AMX_EXPORT_Register,
     AMX_EXPORT_Release,
     AMX_EXPORT_SetCallback,
     AMX_EXPORT_SetDebugHook,
@@ -91,7 +91,7 @@ typedef int (AMXAPI *amx_Register_t)(AMX*, const AMX_NATIVE_INFO*, int);
 typedef int (AMXAPI *amx_GetAddr_t)(AMX*, cell, cell**);
 typedef int (AMXAPI *amx_GetString_t)(char*, const cell*, int, size_t);
 
-// Wskaźniki do funkcji serwera/AMX
+// Wskaźniki globalne
 static void (*logprintf)(const char* format, ...) = nullptr;
 static amx_Register_t   amx_Register_ptr = nullptr;
 static amx_GetAddr_t    amx_GetAddr_ptr  = nullptr;
@@ -149,7 +149,6 @@ static void SaveVehiclesJSON()
     file.close();
 
     if (logprintf) {
-        // %u dla starszych MSVC zamiast %zu
         unsigned count = (unsigned)g_Vehicles.size();
         logprintf("[CustomVehicles] Saved %u vehicles to scriptfiles/vehicles.json", count);
     }
@@ -202,21 +201,13 @@ static bool GetPawnString(AMX* amx, cell amx_addr, char* out, size_t out_sz)
 // ==========================================================
 static cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
 {
-    // params[0] = liczba bajtów parametrów
-    // params[1] = baseid
-    // params[2] = newid
-    // params[3] = dff (adres w AMX)
-    // params[4] = txd (adres w AMX)
-
     char dff[256] = {0};
     char txd[256] = {0};
 
-    // Jeżeli AMX funkcje są dostępne, czytamy stringi z Pawna
     if (amx_GetAddr_ptr && amx_GetString_ptr) {
         GetPawnString(amx, params[3], dff, sizeof(dff));
         GetPawnString(amx, params[4], txd, sizeof(txd));
     } else {
-        // Fallback – nie powinno się zdarzyć, ale niech coś zapisze
         std::snprintf(dff, sizeof(dff), "car.dff");
         std::snprintf(txd, sizeof(txd), "car.txd");
     }
@@ -244,9 +235,11 @@ EXPORT bool PLUGIN_CALL Load(void** ppData)
         amx_GetString_ptr= (amx_GetString_t) amx_exports[AMX_EXPORT_GetString];
     }
 
+    if (!amx_Register_ptr) {
+        logprintf("[CustomVehicles] WARNING: amx_Register pointer is NULL (open.mp likely)!");
+    }
+
     logprintf(">> CustomVehicles plugin (Open.MP compatible) loaded successfully!");
-    if (!amx_Register_ptr)
-        logprintf("[CustomVehicles] WARNING: amx_Register pointer is NULL!");
     return true;
 }
 
@@ -262,11 +255,14 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
         {nullptr, nullptr}
     };
 
+    // Fallback – jeśli brak amx_Register_ptr (open.mp), użyj lokalnej implementacji
     if (amx_Register_ptr) {
         amx_Register_ptr(amx, natives, -1);
         if (logprintf) logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
     } else {
-        if (logprintf) logprintf("[CustomVehicles] ERROR: amx_Register pointer invalid!");
+        extern int amx_Register(AMX*, const AMX_NATIVE_INFO*, int);
+        amx_Register(amx, natives, -1);
+        if (logprintf) logprintf("[CustomVehicles] Registered using fallback amx_Register()");
     }
 
     return AMX_ERR_NONE;
