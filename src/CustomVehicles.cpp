@@ -5,6 +5,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -15,6 +16,7 @@
 #else
     #include <sys/stat.h>
     #include <unistd.h>
+    #include <dlfcn.h>
     #define EXPORT extern "C"
     #define PLAT_WINDOWS 0
 #endif
@@ -96,6 +98,12 @@ static void (*logprintf)(const char* format, ...) = nullptr;
 static amx_Register_t   amx_Register_ptr = nullptr;
 static amx_GetAddr_t    amx_GetAddr_ptr  = nullptr;
 static amx_GetString_t  amx_GetString_ptr= nullptr;
+
+// ==========================================================
+// Dynamiczne API open.mp
+// ==========================================================
+typedef void (*OMPNativeRegister)(AMX*, const AMX_NATIVE_INFO*);
+static OMPNativeRegister omp_native_register = nullptr;
 
 // ==========================================================
 // Struktura pojazdu
@@ -235,9 +243,19 @@ EXPORT bool PLUGIN_CALL Load(void** ppData)
         amx_GetString_ptr= (amx_GetString_t) amx_exports[AMX_EXPORT_GetString];
     }
 
-    if (!amx_Register_ptr) {
-        logprintf("[CustomVehicles] WARNING: amx_Register pointer is NULL (open.mp likely)!");
-    }
+    // Spróbuj znaleźć funkcję open.mp (RegisterPawnNative)
+#if PLAT_WINDOWS
+    HMODULE hServer = GetModuleHandleA(nullptr);
+    omp_native_register = (OMPNativeRegister)GetProcAddress(hServer, "RegisterPawnNative");
+#else
+    void* handle = dlopen(nullptr, RTLD_NOW);
+    omp_native_register = (OMPNativeRegister)dlsym(handle, "RegisterPawnNative");
+#endif
+
+    if (omp_native_register)
+        logprintf("[CustomVehicles] Found open.mp RegisterPawnNative symbol ✅");
+    else
+        logprintf("[CustomVehicles] WARNING: RegisterPawnNative not found (older build?)");
 
     logprintf(">> CustomVehicles plugin (Open.MP compatible) loaded successfully!");
     return true;
@@ -255,14 +273,14 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
         {nullptr, nullptr}
     };
 
-    // Fallback – jeśli brak amx_Register_ptr (open.mp), użyj lokalnej implementacji
-    if (amx_Register_ptr) {
+    if (omp_native_register) {
+        omp_native_register(amx, natives);
+        if (logprintf) logprintf("[CustomVehicles] Registered via Open.MP native API ✅");
+    } else if (amx_Register_ptr) {
         amx_Register_ptr(amx, natives, -1);
-        if (logprintf) logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
+        if (logprintf) logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel (legacy)");
     } else {
-        extern int amx_Register(AMX*, const AMX_NATIVE_INFO*, int);
-        amx_Register(amx, natives, -1);
-        if (logprintf) logprintf("[CustomVehicles] Registered using fallback amx_Register()");
+        if (logprintf) logprintf("[CustomVehicles] ERROR: Cannot register natives — no API available!");
     }
 
     return AMX_ERR_NONE;
