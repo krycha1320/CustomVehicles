@@ -54,11 +54,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y g++-multilib
 
       - name: Create build directory
-        run: mkdir -p build
-
-      - name: Compile plugin (Linux)
-        run: |
-          FILE=$(find . -name "CustomVehicles.cpp" | head -n 1)
-          echo "🔍 Found source file: $FILE"
-          if [ -z "$FILE" ]; then
-            echo
+        run: mkdir -p bui
