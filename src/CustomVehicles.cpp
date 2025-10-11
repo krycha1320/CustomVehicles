@@ -29,9 +29,9 @@ typedef void* AMX;
 
 struct AMX_NATIVE_INFO { const char* name; cell (*func)(AMX*, cell*); };
 
-// wskaźniki z serwera (ustawione w Load)
+// wskaźniki do funkcji z serwera
 void (*logprintf)(const char* format, ...) = nullptr;
-int (*amx_Register_ptr)(AMX*, const AMX_NATIVE_INFO*, int) = nullptr;
+int (*amx_Register_real)(AMX*, const AMX_NATIVE_INFO*, int) = nullptr;
 
 // ==========================================================
 // Struktura pojazdu
@@ -89,7 +89,7 @@ void SaveVehiclesJSON()
 }
 
 // ==========================================================
-// Główna funkcja C++
+// Główna funkcja logiki
 // ==========================================================
 cell AddVehicleModel_Internal(cell baseid, cell newid, const char* dff, const char* txd)
 {
@@ -123,7 +123,6 @@ cell AddVehicleModel_Internal(cell baseid, cell newid, const char* dff, const ch
 // ==========================================================
 cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
 {
-    // przykładowe dane (możesz potem dodać string extraction)
     return AddVehicleModel_Internal(params[1], params[2], "car.dff", "car.txd");
 }
 
@@ -137,13 +136,18 @@ EXPORT unsigned int PLUGIN_CALL Supports()
 
 EXPORT bool PLUGIN_CALL Load(void** ppData)
 {
-    // wskaźniki z SA-MP
-    logprintf = (void(*)(const char*, ...))ppData[0];
-    amx_Register_ptr = (int(*)(AMX*, const AMX_NATIVE_INFO*, int))ppData[2];
+    // dynamiczne mapowanie funkcji
+    struct PluginData {
+        void* data[16];
+    };
+
+    PluginData* pd = (PluginData*)ppData;
+    logprintf = (void(*)(const char*, ...))pd->data[0];
+    amx_Register_real = (int(*)(AMX*, const AMX_NATIVE_INFO*, int))pd->data[2];
 
     if (!logprintf) logprintf = DefaultLog;
 
-    logprintf(">> CustomVehicles plugin (real native registration) loaded!");
+    logprintf(">> CustomVehicles plugin (final build) loaded successfully!");
     return true;
 }
 
@@ -158,10 +162,17 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
         {"AddVehicleModel", n_AddVehicleModel},
         {nullptr, nullptr}
     };
-    if (amx_Register_ptr)
-        amx_Register_ptr(amx, natives, -1);
 
-    if (logprintf) logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
+    if (amx_Register_real)
+    {
+        amx_Register_real(amx, natives, -1);
+        if (logprintf) logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
+    }
+    else
+    {
+        if (logprintf) logprintf("[CustomVehicles] ERROR: amx_Register not available!");
+    }
+
     return 0;
 }
 
