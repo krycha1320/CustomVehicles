@@ -1,78 +1,57 @@
-name: Build CustomVehicles Plugin
+name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
 
 jobs:
   build-windows:
     name: Build Windows DLL (x86)
     runs-on: windows-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure (CMake Win32)
-        run: |
-          mkdir build
-          cd build
-          cmake -A Win32 -DCMAKE_BUILD_TYPE=Release ..
+      - name: Install MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-      - name: Build DLL
-        run: |
-          cd build
-          cmake --build . --config Release
+      - name: Create build directory
+        run: mkdir build
 
-      - name: Upload DLL artifact
+      - name: Compile plugin (Windows)
+        run: |
+          cl /std:c++17 /EHsc /O2 /LD /Fe:build\\CustomVehicles.dll CustomVehicles.cpp
+        shell: cmd
+
+      - name: Upload artifact (DLL)
         uses: actions/upload-artifact@v4
         with:
-          name: CustomVehicles-windows
-          path: build/Release/CustomVehicles.dll
+          name: CustomVehicles-Windows
+          path: |
+            **/CustomVehicles.dll
+            **/CustomVehicles.pdb
 
   build-linux:
     name: Build Linux SO (32-bit)
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
-    steps:
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y gcc-multilib g++-multilib cmake make zip
 
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure (force -m32, static link)
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y g++-multilib
+
+      - name: Compile plugin (Linux)
         run: |
           mkdir -p build
-          cd build
-          cmake -DCMAKE_C_FLAGS="-m32 -static-libgcc" \
-                -DCMAKE_CXX_FLAGS="-m32 -static-libstdc++ -static-libgcc -D_GLIBCXX_USE_CXX11_ABI=0" \
-                -DCMAKE_BUILD_TYPE=Release ..
+          g++ -m32 -std=c++17 -fPIC -O2 -shared CustomVehicles.cpp -o build/CustomVehicles.so
 
-      - name: Build SO
-        run: |
-          cd build
-          cmake --build . --config Release -- -j$(nproc)
-
-      - name: Prepare release package
-        run: |
-          mkdir -p release
-          cp build/CustomVehicles.so release/
-          echo "CustomVehicles Plugin build - Linux (.so) and Windows (.dll)" > release/README.txt
-          zip -j CustomVehicles.zip release/* || true
-
-      - name: Upload SO artifact
+      - name: Upload artifact (SO)
         uses: actions/upload-artifact@v4
         with:
-          name: CustomVehicles-linux
-          path: build/CustomVehicles.so
-
-      - name: Upload Combined ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: CustomVehicles
-          path: CustomVehicles.zip
+          name: CustomVehicles-Linux
+          path: |
+            **/CustomVehicles.so
