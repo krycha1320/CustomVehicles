@@ -1,3 +1,11 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
   build-windows:
     name: Build Windows DLL (x86)
     runs-on: windows-latest
@@ -6,11 +14,18 @@
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Developer Command Prompt
+      - name: Install MinGW
+        run: choco install mingw --no-progress -y
+
+      - name: Add MinGW to PATH
+        run: echo "C:\ProgramData\mingw64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+
+      - name: Create build directory
+        run: mkdir build
+
+      - name: Compile plugin (Windows)
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86
-          cl /std:c++17 /EHsc /O2 /LD /Fe:build\\CustomVehicles.dll CustomVehicles.cpp
-        shell: cmd
+          g++ -std=c++17 -O2 -shared -static -s CustomVehicles.cpp -o build/CustomVehicles.dll
 
       - name: Upload artifact (DLL)
         uses: actions/upload-artifact@v4
@@ -18,3 +33,24 @@
           name: CustomVehicles-Windows
           path: |
             **/CustomVehicles.dll
+
+  build-linux:
+    name: Build Linux SO (32-bit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y g++-multilib
+
+      - name: Compile plugin (Linux)
+        run: |
+          mkdir -p build
+          g++ -m32 -std=c++17 -fPIC -O2 -shared CustomVehicles.cpp -o build/CustomVehicles.so
+
+      - name: Upload artifact (SO)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles-Linux
