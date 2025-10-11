@@ -24,8 +24,16 @@ jobs:
         run: mkdir build
 
       - name: Compile plugin (Windows)
+        shell: bash
         run: |
-          g++ -std=c++17 -O2 -shared -static -s CustomVehicles.cpp -o build/CustomVehicles.dll
+          FILE=$(find . -name "CustomVehicles.cpp" | head -n 1)
+          echo "🔍 Found source file: $FILE"
+          if [ -z "$FILE" ]; then
+            echo "❌ CustomVehicles.cpp not found!"
+            exit 1
+          fi
+          g++ -std=c++17 -O2 -shared -static -s "$FILE" -o build/CustomVehicles.dll
+          echo "✅ Build finished: build/CustomVehicles.dll"
 
       - name: Upload artifact (DLL)
         uses: actions/upload-artifact@v4
@@ -45,12 +53,23 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y g++-multilib
 
+      - name: Create build directory
+        run: mkdir -p build
+
       - name: Compile plugin (Linux)
         run: |
-          mkdir -p build
-          g++ -m32 -std=c++17 -fPIC -O2 -shared CustomVehicles.cpp -o build/CustomVehicles.so
+          FILE=$(find . -name "CustomVehicles.cpp" | head -n 1)
+          echo "🔍 Found source file: $FILE"
+          if [ -z "$FILE" ]; then
+            echo "❌ CustomVehicles.cpp not found!"
+            exit 1
+          fi
+          g++ -m32 -std=c++17 -fPIC -O2 -shared "$FILE" -o build/CustomVehicles.so
+          echo "✅ Build finished: build/CustomVehicles.so"
 
       - name: Upload artifact (SO)
         uses: actions/upload-artifact@v4
         with:
           name: CustomVehicles-Linux
+          path: |
+            **/CustomVehicles.so
