@@ -33,38 +33,4 @@ jobs:
             exit 1
           fi
           g++ -std=c++17 -O2 -shared -static -static-libgcc -static-libstdc++ \
-              -s "$FILE" -o build/CustomVehicles.dll
-          echo "✅ Build finished: build/CustomVehicles.dll"
-
-      - name: Upload artifact (DLL)
-        uses: actions/upload-artifact@v4
-        with:
-          name: CustomVehicles-Windows
-          path: |
-            **/CustomVehicles.dll
-
-  build-linux:
-    name: Build Linux SO (Debian10 compatible)
-    runs-on: ubuntu-latest
-    container: debian:buster
-
-    steps:
-      - name: Fix old Debian sources (buster archive)
-        run: |
-          echo "deb http://archive.debian.org/debian buster main contrib non-free" > /etc/apt/sources.list
-          echo "deb http://archive.debian.org/debian-security buster/updates main contrib non-free" >> /etc/apt/sources.list
-          echo "Acquire::Check-Valid-Until false;" > /etc/apt/apt.conf.d/99ignore-expiry
-
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y g++ gcc-multilib g++-multilib make findutils
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create build directory
-        run: mkdir -p build
-
-      - name: Compile plugin (Linux)
-        run
+              -s "$FILE" -o build/CustomVehicles.d
