@@ -1,8 +1,41 @@
+name: Build CustomVehicles Plugin
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-windows:
+    name: Build Windows DLL (x86)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure CMake (Win32)
+        run: |
+          mkdir build
+          cd build
+          cmake -A Win32 -DCMAKE_BUILD_TYPE=Release ..
+
+      - name: Build DLL
+        run: |
+          cd build
+          cmake --build . --config Release
+
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles-windows
+          path: build/Release/CustomVehicles.dll
+
   build-linux:
-    name: Build Linux 32-bit SO
+    name: Build Linux SO (32-bit)
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install 32-bit toolchain
@@ -11,18 +44,18 @@
           sudo apt-get update
           sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 cmake make
 
-      - name: Configure (Makefiles, force -m32)
+      - name: Configure (force -m32)
         run: |
           mkdir -p build
           cd build
-          cmake -DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32" -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32 -static-libstdc++ -static-libgcc" -DCMAKE_BUILD_TYPE=Release ..
 
-      - name: Build (Release)
+      - name: Build SO
         run: |
           cd build
           cmake --build . --config Release -- -j$(nproc)
 
-      - name: Upload Linux artifact (SO)
+      - name: Upload SO artifact
         uses: actions/upload-artifact@v4
         with:
           name: CustomVehicles-linux
