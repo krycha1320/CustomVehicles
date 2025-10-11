@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure CMake (Win32)
+      - name: Configure (CMake Win32)
         run: |
           mkdir build
           cd build
@@ -34,21 +34,24 @@ jobs:
   build-linux:
     name: Build Linux SO (32-bit)
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y gcc-multilib g++-multilib cmake make zip
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install 32-bit toolchain
-        run: |
-          sudo dpkg --add-architecture i386 || true
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 cmake make zip
-
-      - name: Configure (force -m32)
+      - name: Configure (force -m32, static link)
         run: |
           mkdir -p build
           cd build
-          cmake -DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32 -static-libstdc++ -static-libgcc -D_GLIBCXX_USE_CXX11_ABI=0" -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DCMAKE_C_FLAGS="-m32 -static-libgcc" \
+                -DCMAKE_CXX_FLAGS="-m32 -static-libstdc++ -static-libgcc -D_GLIBCXX_USE_CXX11_ABI=0" \
+                -DCMAKE_BUILD_TYPE=Release ..
 
       - name: Build SO
         run: |
