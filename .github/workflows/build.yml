@@ -1,46 +1,60 @@
-name: Build CustomVehicles Plugin
+name: Build 32-bit DLL and SO
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-
-    name: Build on ${{ matrix.os }}
+  build-windows:
+    name: Build Windows 32-bit DLL
+    runs-on: windows-latest
     steps:
-      - name: 🧩 Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Linux - instalacja zależności
-      - name: ⚙️ Install dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Configure (Visual Studio, Win32)
         run: |
-          sudo apt update
-          sudo apt install -y gcc-multilib g++-multilib cmake make
+          mkdir -p build
+          cd build
+          cmake -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release ..
 
-      # Windows - instalacja MinGW i CMake
-      - name: ⚙️ Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install mingw cmake -y
-          echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/bin" >> $GITHUB_PATH
+      - name: Build (Release)
+        run: cmake --build build --config Release -- /m
 
-      # Konfiguracja i build
-      - name: 🏗️ Configure and build project
-        run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release
-
-      # Upload plików
-      - name: 📦 Upload built plugin
+      - name: Upload Windows artifact (DLL)
         uses: actions/upload-artifact@v4
         with:
-          name: CustomVehicles-${{ matrix.os }}
-          path: plugins/
+          name: CustomVehicles-windows
+          path: build/Release/CustomVehicles.dll
+
+  build-linux:
+    name: Build Linux 32-bit SO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install 32-bit toolchain
+        run: |
+          sudo dpkg --add-architecture i386 || true
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 cmake make
+
+      - name: Configure (Makefiles, force -m32)
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32" -DCMAKE_BUILD_TYPE=Release ..
+
+      - name: Build (Release)
+        run: |
+          cd build
+          cmake --build . --config Release -- -j$(nproc)
+
+      - name: Upload Linux artifact (SO)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles-linux
+          path: build/CustomVehicles.so
