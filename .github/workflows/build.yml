@@ -1,3 +1,48 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-windows:
+    name: Build Windows DLL (x86)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install MinGW
+        run: choco install mingw --no-progress -y
+
+      - name: Add MinGW to PATH
+        run: echo "C:\ProgramData\mingw64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+
+      - name: Create build directory
+        run: mkdir build
+
+      - name: Compile plugin (Windows)
+        shell: bash
+        run: |
+          FILE=$(find . -name "CustomVehicles.cpp" | head -n 1)
+          echo "🔍 Found source file: $FILE"
+          if [ -z "$FILE" ]; then
+            echo "❌ CustomVehicles.cpp not found!"
+            exit 1
+          fi
+          g++ -std=c++17 -O2 -shared -static -static-libgcc -static-libstdc++ \
+              -s "$FILE" -o build/CustomVehicles.dll
+          echo "✅ Build finished: build/CustomVehicles.dll"
+
+      - name: Upload artifact (DLL)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles-Windows
+          path: |
+            **/CustomVehicles.dll
+
   build-linux:
     name: Build Linux SO (Debian10 compatible)
     runs-on: ubuntu-latest
@@ -22,21 +67,4 @@
         run: mkdir -p build
 
       - name: Compile plugin (Linux)
-        run: |
-          FILE=$(find . -name "CustomVehicles.cpp" | head -n 1)
-          echo "🔍 Found source file: $FILE"
-          if [ -z "$FILE" ]; then
-            echo "❌ CustomVehicles.cpp not found!"
-            exit 1
-          fi
-          g++ -m32 -std=c++17 -fPIC -O2 -static-libgcc -static-libstdc++ \
-              -D_GLIBCXX_USE_CXX11_ABI=0 \
-              -shared "$FILE" -o build/CustomVehicles.so
-          echo "✅ Build finished: build/CustomVehicles.so"
-
-      - name: Upload artifact (SO)
-        uses: actions/upload-artifact@v4
-        with:
-          name: CustomVehicles-Linux
-          path: |
-            **/CustomVehicles.so
+        run
