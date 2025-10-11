@@ -1,39 +1,34 @@
-// ============================================================
-//  Plugin: CustomVehicles (cross-platform 32-bit build)
-//  Autor: Krystian Chmielewski / Puls Miasta
-//  Działa bez SDK, kompiluje się na Windows (.dll) i Linux (.so)
-// ============================================================
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <sys/stat.h>
 
 #ifdef _WIN32
-    #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
+    #include <direct.h>
+    #define mkdir _mkdir
     #define EXPORT extern "C" __declspec(dllexport)
 #else
     #include <dlfcn.h>
     #include <unistd.h>
-    #include <sys/stat.h> // <── DODANE, aby działało mkdir() na Linuxie
-    #define EXPORT extern "C" __attribute__((visibility("default")))
+    #define EXPORT extern "C"
 #endif
 
-#include <string>
-#include <vector>
-#include <fstream>
-#include <iostream>
-#include <cstdarg>
+// ==========================================================
+// Minimalne definicje potrzebne do pracy pluginu
+// ==========================================================
+typedef unsigned int cell;
+typedef void* AMX;
+#define AMX_NATIVE_CALL
+#define PLUGIN_CALL
+#define SUPPORTS_VERSION 1
+#define SUPPORTS_AMX_NATIVES 2
+#define AMX_ERR_NONE 0
 
-// ============================================================
-//  Minimalne typy i struktury AMX (wymagane przez serwer SA-MP)
-// ============================================================
-typedef int cell;
-struct AMX { int dummy; };
-
-// logprintf – wskaźnik na funkcję logowania SA-MP
-typedef void (*logprintf_t)(const char* format, ...);
-static logprintf_t logprintf = nullptr;
-
-// ============================================================
-//  Definicja struktury pojazdu
-// ============================================================
+// ==========================================================
+// Struktura pojazdu
+// ==========================================================
 struct VehicleDef {
     int baseid = 0;
     int newid = 0;
@@ -41,118 +36,104 @@ struct VehicleDef {
     std::string txd;
 };
 
-// globalna lista pojazdów
-static std::vector<VehicleDef> g_Vehicles;
+std::vector<VehicleDef> g_Vehicles;
 
-// ============================================================
-//  Pomocnicza funkcja logowania
-// ============================================================
-static void Log(const char* fmt, ...)
-{
-    char buffer[512];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
+// Funkcja logująca (przypisywana przez serwer)
+void (*logprintf)(const char* format, ...) = nullptr;
 
-    if (logprintf)
-        logprintf("%s", buffer);
-    else
-        std::cout << buffer << std::endl;
-}
-
-// ============================================================
-//  Funkcje eksportowane przez plugin (dla SA-MP/open.mp)
-// ============================================================
-
-// Informacja o kompatybilności pluginu
-EXPORT unsigned int Supports()
-{
-    return 0x0200; // SUPPORTS_VERSION | SUPPORTS_AMX_NATIVES
-}
-
-// Ładowanie pluginu
-EXPORT bool Load(void** ppData)
-{
-#ifdef _WIN32
-    logprintf = (logprintf_t)ppData[0];
-#endif
-
-    Log(">> CustomVehicles plugin loaded successfully (cross-platform build).");
-    return true;
-}
-
-// Wyładowanie pluginu
-EXPORT void Unload()
-{
-    Log(">> CustomVehicles plugin unloaded.");
-}
-
-// ============================================================
-//  Funkcja dodająca nowy model pojazdu
-// ============================================================
-EXPORT int AddVehicleModel(int baseid, int newid, const char* dff, const char* txd)
-{
-    VehicleDef v;
-    v.baseid = baseid;
-    v.newid = newid;
-    v.dff = (dff ? dff : "");
-    v.txd = (txd ? txd : "");
-    g_Vehicles.push_back(v);
-
-    Log("[CustomVehicles] Added vehicle model: base %d → new %d (%s / %s)",
-        baseid, newid, v.dff.c_str(), v.txd.c_str());
-
-    return 1;
-}
-
-// ============================================================
-//  Zapis pojazdów do pliku JSON (scriptfiles/vehicles.json)
-// ============================================================
-static void SaveVehiclesJSON()
-{
-#ifdef _WIN32
-    CreateDirectoryA("scriptfiles", nullptr);
-#else
-    mkdir("scriptfiles", 0777);
-#endif
-
+// ==========================================================
+// Prosta funkcja zapisu JSON
+// ==========================================================
+void SaveVehiclesJSON() {
+    mkdir("scriptfiles");
     std::ofstream file("scriptfiles/vehicles.json");
-    if (!file.is_open())
-    {
-        Log("[CustomVehicles] ERROR: Cannot open scriptfiles/vehicles.json for writing.");
+    if (!file.is_open()) {
+        if (logprintf) logprintf("[CustomVehicles] ERROR: cannot open scriptfiles/vehicles.json!");
         return;
     }
 
     file << "[\n";
-    for (size_t i = 0; i < g_Vehicles.size(); ++i)
-    {
-        const auto& v = g_Vehicles[i];
-        file << "  { \"baseid\": " << v.baseid
-             << ", \"newid\": " << v.newid
-             << ", \"dff\": \"" << v.dff
-             << "\", \"txd\": \"" << v.txd << "\" }";
-        if (i + 1 < g_Vehicles.size()) file << ",";
+    for (size_t i = 0; i < g_Vehicles.size(); ++i) {
+        file << "  {\n";
+        file << "    \"baseid\": " << g_Vehicles[i].baseid << ",\n";
+        file << "    \"newid\": " << g_Vehicles[i].newid << ",\n";
+        file << "    \"dff\": \"" << g_Vehicles[i].dff << "\",\n";
+        file << "    \"txd\": \"" << g_Vehicles[i].txd << "\"\n";
+        file << "  }";
+        if (i < g_Vehicles.size() - 1) file << ",";
         file << "\n";
     }
     file << "]";
     file.close();
 
-    Log("[CustomVehicles] Saved %zu vehicles to scriptfiles/vehicles.json", g_Vehicles.size());
+    if (logprintf)
+        logprintf("[CustomVehicles] Saved %zu vehicles to scriptfiles/vehicles.json", g_Vehicles.size());
 }
 
-// ============================================================
-//  Wymagane funkcje AMX (nieużywane, ale muszą istnieć)
-// ============================================================
-EXPORT int AmxLoad(AMX* amx)
+// ==========================================================
+// Główna funkcja – rejestracja pojazdu
+// ==========================================================
+cell AMX_NATIVE_CALL AddVehicleModel(cell baseid, cell newid, const char* dff, const char* txd)
 {
-    Log("[CustomVehicles] AMX loaded.");
-    return 0;
-}
+    if (!dff || !txd) {
+        if (logprintf) logprintf("[CustomVehicles] ERROR: missing file name!");
+        return 0;
+    }
+    if (newid < 20000) {
+        if (logprintf) logprintf("[CustomVehicles] ERROR: invalid new ID (%d) must be >=20000", newid);
+        return 0;
+    }
 
-EXPORT int AmxUnload(AMX* amx)
-{
+    VehicleDef v;
+    v.baseid = (int)baseid;
+    v.newid = (int)newid;
+    v.dff = dff;
+    v.txd = txd;
+    g_Vehicles.push_back(v);
+
     SaveVehiclesJSON();
-    Log("[CustomVehicles] AMX unloaded and data saved.");
+
+    if (logprintf)
+        logprintf("[CustomVehicles] Added model: base %d → new %d (%s / %s)", baseid, newid, dff, txd);
+
+    return 1;
+}
+
+// ==========================================================
+// Symulacja interfejsu pluginu (bez amx.h)
+// ==========================================================
+EXPORT unsigned int PLUGIN_CALL Supports()
+{
+    return SUPPORTS_VERSION | SUPPORTS_AMX_NATIVES;
+}
+
+EXPORT bool PLUGIN_CALL Load(void** ppData)
+{
+    // w prawdziwym pluginie tu byłoby ppData[PLUGIN_DATA_LOGPRINTF]
+    logprintf = [](const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        vprintf(fmt, args);
+        printf("\n");
+        va_end(args);
+    };
+
+    logprintf(">> CustomVehicles plugin (no-SDK build) loaded successfully!");
+    return true;
+}
+
+EXPORT void PLUGIN_CALL Unload()
+{
+    if (logprintf) logprintf(">> CustomVehicles plugin unloaded.");
+}
+
+EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
+{
+    if (logprintf) logprintf("[CustomVehicles] Dummy AMX load (no SDK).");
     return 0;
+}
+
+EXPORT int PLUGIN_CALL AmxUnload(AMX* amx)
+{
+    return AMX_ERR_NONE;
 }
