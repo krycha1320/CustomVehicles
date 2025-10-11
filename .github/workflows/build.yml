@@ -1,4 +1,4 @@
-name: Build CustomVehicles (DLL + SO, Debian10 safe)
+name: Build CustomVehicles (Universal Open.MP + SA-MP)
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
     container: debian:buster
 
     steps:
-      - name: Fix old Debian sources
+      - name: Fix old Debian sources (archive)
         run: |
           echo "deb http://archive.debian.org/debian buster main contrib non-free" > /etc/apt/sources.list
           echo "deb http://archive.debian.org/debian-security buster/updates main contrib non-free" >> /etc/apt/sources.list
