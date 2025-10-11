@@ -27,9 +27,14 @@ typedef void* AMX;
 #define SUPPORTS_AMX_NATIVES 2
 #define AMX_ERR_NONE 0
 
+enum PLUGIN_DATA {
+    PLUGIN_DATA_LOGPRINTF = 0,
+    PLUGIN_DATA_AMX_EXPORTS = 1
+};
+
 struct AMX_NATIVE_INFO { const char* name; cell (*func)(AMX*, cell*); };
 
-// wskaźniki do funkcji z serwera
+// wskaźniki do funkcji serwera
 void (*logprintf)(const char* format, ...) = nullptr;
 int (*amx_Register_real)(AMX*, const AMX_NATIVE_INFO*, int) = nullptr;
 
@@ -89,7 +94,7 @@ void SaveVehiclesJSON()
 }
 
 // ==========================================================
-// Główna funkcja logiki
+// Główna logika
 // ==========================================================
 cell AddVehicleModel_Internal(cell baseid, cell newid, const char* dff, const char* txd)
 {
@@ -119,7 +124,7 @@ cell AddVehicleModel_Internal(cell baseid, cell newid, const char* dff, const ch
 }
 
 // ==========================================================
-// Native dla Pawn
+// Native Pawn
 // ==========================================================
 cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
 {
@@ -127,7 +132,7 @@ cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
 }
 
 // ==========================================================
-// Interfejs pluginu
+// Plugin interfejs
 // ==========================================================
 EXPORT unsigned int PLUGIN_CALL Supports()
 {
@@ -136,18 +141,13 @@ EXPORT unsigned int PLUGIN_CALL Supports()
 
 EXPORT bool PLUGIN_CALL Load(void** ppData)
 {
-    // dynamiczne mapowanie funkcji
-    struct PluginData {
-        void* data[16];
-    };
-
-    PluginData* pd = (PluginData*)ppData;
-    logprintf = (void(*)(const char*, ...))pd->data[0];
-    amx_Register_real = (int(*)(AMX*, const AMX_NATIVE_INFO*, int))pd->data[2];
+    logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
+    void** amx_exports = (void**)ppData[PLUGIN_DATA_AMX_EXPORTS];
+    amx_Register_real = (int(*)(AMX*, const AMX_NATIVE_INFO*, int))amx_exports[0]; // 0 = amx_Register
 
     if (!logprintf) logprintf = DefaultLog;
 
-    logprintf(">> CustomVehicles plugin (final build) loaded successfully!");
+    logprintf(">> CustomVehicles plugin (Open.MP compatible) loaded successfully!");
     return true;
 }
 
@@ -170,7 +170,7 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
     }
     else
     {
-        if (logprintf) logprintf("[CustomVehicles] ERROR: amx_Register not available!");
+        if (logprintf) logprintf("[CustomVehicles] ERROR: amx_Register pointer invalid!");
     }
 
     return 0;
