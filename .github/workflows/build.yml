@@ -33,7 +33,7 @@ jobs:
 
   build-linux:
     name: Build Linux SO (32-bit)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,21 +42,34 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386 || true
           sudo apt-get update
-          sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 cmake make
+          sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 cmake make zip
 
       - name: Configure (force -m32)
         run: |
           mkdir -p build
           cd build
-          cmake -DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32 -static-libstdc++ -static-libgcc" -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DCMAKE_C_FLAGS="-m32" -DCMAKE_CXX_FLAGS="-m32 -static-libstdc++ -static-libgcc -D_GLIBCXX_USE_CXX11_ABI=0" -DCMAKE_BUILD_TYPE=Release ..
 
       - name: Build SO
         run: |
           cd build
           cmake --build . --config Release -- -j$(nproc)
 
+      - name: Prepare release package
+        run: |
+          mkdir -p release
+          cp build/CustomVehicles.so release/
+          echo "CustomVehicles Plugin build - Linux (.so) and Windows (.dll)" > release/README.txt
+          zip -j CustomVehicles.zip release/* || true
+
       - name: Upload SO artifact
         uses: actions/upload-artifact@v4
         with:
           name: CustomVehicles-linux
           path: build/CustomVehicles.so
+
+      - name: Upload Combined ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles
+          path: CustomVehicles.zip
