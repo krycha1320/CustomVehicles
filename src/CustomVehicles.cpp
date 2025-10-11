@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include <sys/stat.h>
-#include <cstdarg> // dla va_start / va_end
+#include <cstdarg>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -16,7 +16,7 @@
 #endif
 
 // ==========================================================
-// Minimalne definicje pluginu
+// Minimalne definicje pluginu bez SDK
 // ==========================================================
 typedef unsigned int cell;
 typedef void* AMX;
@@ -25,6 +25,19 @@ typedef void* AMX;
 #define SUPPORTS_VERSION 1
 #define SUPPORTS_AMX_NATIVES 2
 #define AMX_ERR_NONE 0
+
+// Struktura AMX_NATIVE_INFO - do rejestracji natywnych funkcji
+struct AMX_NATIVE_INFO { const char* name; cell (*func)(AMX*, cell*); };
+
+// Deklaracja funkcji rejestrującej (podmienimy własną)
+extern "C" int amx_Register(AMX* amx, const AMX_NATIVE_INFO* list, int number)
+{
+    // Tylko do logów — bez faktycznej integracji z AMX
+    (void)amx;
+    (void)list;
+    (void)number;
+    return 0;
+}
 
 // ==========================================================
 // Struktura pojazdu
@@ -38,7 +51,9 @@ struct VehicleDef {
 
 std::vector<VehicleDef> g_Vehicles;
 
-// Prosty logger (działa na każdym systemie)
+// ==========================================================
+// Logger (uniwersalny)
+// ==========================================================
 void DefaultLog(const char* fmt, ...)
 {
     va_list args;
@@ -53,12 +68,9 @@ void (*logprintf)(const char* format, ...) = DefaultLog;
 // ==========================================================
 // Zapis JSON do scriptfiles
 // ==========================================================
-void SaveVehiclesJSON() {
-#ifdef _WIN32
+void SaveVehiclesJSON()
+{
     mkdir("scriptfiles", 0777);
-#else
-    mkdir("scriptfiles", 0777);
-#endif
 
     std::ofstream file("scriptfiles/vehicles.json");
     if (!file.is_open()) {
@@ -84,9 +96,9 @@ void SaveVehiclesJSON() {
 }
 
 // ==========================================================
-// Główna funkcja dodająca model
+// Funkcja C++ do dodawania pojazdu
 // ==========================================================
-cell AMX_NATIVE_CALL AddVehicleModel(cell baseid, cell newid, const char* dff, const char* txd)
+cell AddVehicleModel_Internal(cell baseid, cell newid, const char* dff, const char* txd)
 {
     if (!dff || !txd) {
         logprintf("[CustomVehicles] ERROR: missing file name!");
@@ -113,7 +125,20 @@ cell AMX_NATIVE_CALL AddVehicleModel(cell baseid, cell newid, const char* dff, c
 }
 
 // ==========================================================
-// Symulacja interfejsu pluginu (bez amx.h)
+// Funkcja natywna dla Pawn
+// ==========================================================
+cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
+{
+    // symulacja odczytu argumentów z Pawn
+    cell baseid = params[1];
+    cell newid = params[2];
+
+    // tymczasowo — przykładowe dane
+    return AddVehicleModel_Internal(baseid, newid, "car.dff", "car.txd");
+}
+
+// ==========================================================
+// Interfejs pluginu
 // ==========================================================
 EXPORT unsigned int PLUGIN_CALL Supports()
 {
@@ -131,9 +156,15 @@ EXPORT void PLUGIN_CALL Unload()
     logprintf(">> CustomVehicles plugin unloaded.");
 }
 
-EXPORT int PLUGIN_CALL AmxLoad(AMX*)
+// Rejestracja funkcji dla Pawn
+EXPORT int PLUGIN_CALL AmxLoad(AMX* amx)
 {
-    logprintf("[CustomVehicles] Dummy AMX load (no SDK).");
+    static const AMX_NATIVE_INFO natives[] = {
+        {"AddVehicleModel", n_AddVehicleModel},
+        {nullptr, nullptr}
+    };
+    amx_Register(amx, natives, -1);
+    logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
     return 0;
 }
 
