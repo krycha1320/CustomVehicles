@@ -1,4 +1,4 @@
-name: Build
+name: Build CustomVehicles (DLL + SO)
 
 on:
   push:
@@ -33,4 +33,32 @@ jobs:
             exit 1
           fi
           g++ -std=c++17 -O2 -shared -static -static-libgcc -static-libstdc++ \
-              -s "$FILE" -o build/CustomVehicles.d
+              -s "$FILE" -o build/CustomVehicles.dll
+          echo "✅ Build finished: build/CustomVehicles.dll"
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomVehicles-Windows
+          path: build/CustomVehicles.dll
+
+  build-linux:
+    name: Build Linux SO (x86)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install 32-bit compiler
+        run: sudo apt-get update && sudo apt-get install -y g++-multilib
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Compile plugin (Linux)
+        run: |
+          FILE=$(find . -name "CustomVehicles.cpp" | head -n 1)
+          echo "🔍 Found source file: $FILE"
+          if [ -z "$FILE" ]; then
+            echo
