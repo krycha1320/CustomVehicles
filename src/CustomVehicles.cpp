@@ -11,6 +11,7 @@
 #else
     #include <dlfcn.h>
     #include <unistd.h>
+    #include <sys/stat.h> // <── DODANE, aby działało mkdir() na Linuxie
     #define EXPORT extern "C" __attribute__((visibility("default")))
 #endif
 
