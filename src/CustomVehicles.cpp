@@ -13,11 +13,11 @@
     #define EXPORT extern "C" __declspec(dllexport)
 #else
     #include <unistd.h>
-    #define EXPORT extern "C"
+    #define EXPORT extern "C" __attribute__((visibility("default")))
 #endif
 
 // =============================================
-// Minimalne definicje AMX i funkcji open.mp/SA-MP
+// Minimalne definicje AMX i funkcji open.mp / SA-MP
 // =============================================
 typedef unsigned int cell;
 typedef void* AMX;
@@ -38,15 +38,20 @@ struct AMX_NATIVE_INFO {
     cell (*func)(AMX*, cell*);
 };
 
+// =============================================
+// Dostęp do funkcji AMX z open.mp
+// =============================================
 extern void *pAMXFunctions;
+void *pAMXFunctions = nullptr; // 🔧 WAŻNE – definicja, żeby uniknąć błędu undefined symbol
+
 #define amx_Register ((int (*)(AMX*, const AMX_NATIVE_INFO*, int))(((void**)pAMXFunctions)[12]))
 
 // =============================================
-// Prosta implementacja amx_GetString
+// Minimalna implementacja amx_GetString
 // =============================================
 static void amx_GetString(char *dest, cell addr, int /*use_wchar*/, size_t size)
 {
-    // AMX strings są zapisywane jako ciąg celli (4 bajty)
+    if (!addr || !dest || size == 0) return;
     char *src = (char*)addr;
     strncpy(dest, src, size - 1);
     dest[size - 1] = '\0';
@@ -83,11 +88,7 @@ void DefaultLog(const char* fmt, ...) {
 // Zapis pojazdów do JSON
 // =============================================
 void SaveVehiclesJSON() {
-    #ifdef _WIN32
-        _mkdir("scriptfiles");
-    #else
-        mkdir("scriptfiles", 0777);
-    #endif
+    mkdir("scriptfiles", 0777);
 
     std::ofstream file("scriptfiles/vehicles.json");
     if (!file.is_open()) {
