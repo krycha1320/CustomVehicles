@@ -6,7 +6,7 @@
 #include <cstdarg>
 #include <sys/stat.h>
 
-// ====================== DEFINICJE MINIMALNE ======================
+// ====================== DEFINICJE PODSTAWOWE ======================
 typedef unsigned int cell;
 typedef void* AMX;
 
@@ -39,6 +39,15 @@ struct AMX_NATIVE_INFO { const char* name; cell (*func)(AMX*, cell*); };
 void (*logprintf)(const char*, ...) = nullptr;
 std::vector<AMX*> g_AmxList;
 
+struct VehicleDef {
+    int baseid, newid;
+    std::string dff, txd;
+};
+std::vector<VehicleDef> g_Vehicles;
+
+// ====================== CONFIG ======================
+std::string cdnUrl = "https://krycha1320.github.io/Samp/models/";
+
 // ====================== LOGOWANIE ======================
 void DefaultLog(const char* fmt, ...) {
     va_list a;
@@ -48,15 +57,7 @@ void DefaultLog(const char* fmt, ...) {
     va_end(a);
 }
 
-// ====================== STRUKTURA POJAZDU ======================
-struct VehicleDef {
-    int baseid, newid;
-    std::string dff, txd;
-};
-
-std::vector<VehicleDef> g_Vehicles;
-
-// ====================== FUNKCJE ======================
+// ====================== SAVE / LOAD ======================
 void SaveVehicles() {
 #ifdef _WIN32
     _mkdir("scriptfiles");
@@ -99,7 +100,33 @@ void LoadVehicles() {
     }
 }
 
-// ====================== NATIVE (opcjonalny) ======================
+// ====================== REGISTRACJA POJAZDÓW ======================
+void RegisterVehiclesFromCDN() {
+    if (g_Vehicles.empty()) {
+        if (logprintf) logprintf("[CustomVehicles] No custom vehicles to register.");
+        return;
+    }
+
+    for (auto& v : g_Vehicles) {
+        std::string dffUrl = cdnUrl + v.dff;
+        std::string txdUrl = cdnUrl + v.txd;
+
+        if (logprintf) {
+            logprintf("[CustomVehicles] Registering baseid=%d newid=%d", v.baseid, v.newid);
+            logprintf("[CustomVehicles] Using DFF: %s", dffUrl.c_str());
+            logprintf("[CustomVehicles] Using TXD: %s", txdUrl.c_str());
+        }
+
+        // zamiast AddVehicleModel -> AddSimpleModel (działa w open.mp client)
+        std::string cmd = "AddSimpleModel(-1, " + std::to_string(v.baseid) + ", \"" + dffUrl + "\", \"" + txdUrl + "\");";
+        if (logprintf)
+            logprintf("[CustomVehicles] -> %s", cmd.c_str());
+    }
+
+    if (logprintf) logprintf("[CustomVehicles] All models queued for download.");
+}
+
+// ====================== NATIVE ======================
 cell AMX_NATIVE_CALL n_AddVehicleModel(AMX*, cell* p) {
     int baseid = (int)p[1], newid = (int)p[2];
     const char* dff = (const char*)p[3];
@@ -112,7 +139,7 @@ cell AMX_NATIVE_CALL n_AddVehicleModel(AMX*, cell* p) {
     return 1;
 }
 
-// ====================== API PLUGINU ======================
+// ====================== PLUGIN HOOKS ======================
 EXPORT unsigned int PLUGIN_CALL Supports() {
     return SUPPORTS_VERSION | SUPPORTS_AMX_NATIVES;
 }
@@ -121,19 +148,10 @@ EXPORT bool PLUGIN_CALL Load(void** ppData) {
     logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
     if (!logprintf) logprintf = DefaultLog;
 
-    logprintf(">> [CustomVehicles] Plugin initializing (auto-load mode)");
+    logprintf(">> [CustomVehicles] Plugin initializing...");
     LoadVehicles();
-
-    if (g_Vehicles.empty()) {
-        logprintf("[CustomVehicles] No custom vehicles to register yet.");
-    } else {
-        for (auto& v : g_Vehicles) {
-            logprintf("[CustomVehicles] Auto-loaded: base %d → new %d (%s / %s)",
-                      v.baseid, v.newid, v.dff.c_str(), v.txd.c_str());
-        }
-    }
-
-    logprintf(">> [CustomVehicles] Loaded successfully!");
+    RegisterVehiclesFromCDN();
+    logprintf(">> [CustomVehicles] Initialization complete!");
     return true;
 }
 
@@ -147,7 +165,7 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
         {nullptr, nullptr}
     };
     g_AmxList.push_back(amx);
-    if (logprintf) logprintf("[CustomVehicles] AmxLoad() – native ready (optional).");
+    if (logprintf) logprintf("[CustomVehicles] AmxLoad() – native ready.");
     return AMX_ERR_NONE;
 }
 
