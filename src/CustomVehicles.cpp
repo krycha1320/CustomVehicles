@@ -10,14 +10,14 @@
     #include <windows.h>
     #include <direct.h>
     #define mkdir(path, mode) _mkdir(path)
-    #define EXPORT extern "C" __declspec(dllexport)
+    #define PLUGIN_EXPORT extern "C" __declspec(dllexport)
 #else
     #include <unistd.h>
-    #define EXPORT extern "C" __attribute__((visibility("default")))
+    #define PLUGIN_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
 
 // =============================================
-// Minimalne definicje AMX i funkcji open.mp / SA-MP
+// Minimalne definicje AMX / open.mp API
 // =============================================
 typedef unsigned int cell;
 typedef void* AMX;
@@ -39,11 +39,9 @@ struct AMX_NATIVE_INFO {
 };
 
 // =============================================
-// Dostęp do funkcji AMX z open.mp
+// Wskaźnik funkcji AMX z open.mp
 // =============================================
-extern void *pAMXFunctions;
-void *pAMXFunctions = nullptr; // 🔧 WAŻNE – definicja, żeby uniknąć błędu undefined symbol
-
+void *pAMXFunctions = nullptr;
 #define amx_Register ((int (*)(AMX*, const AMX_NATIVE_INFO*, int))(((void**)pAMXFunctions)[12]))
 
 // =============================================
@@ -52,7 +50,7 @@ void *pAMXFunctions = nullptr; // 🔧 WAŻNE – definicja, żeby uniknąć bł
 static void amx_GetString(char *dest, cell addr, int /*use_wchar*/, size_t size)
 {
     if (!addr || !dest || size == 0) return;
-    char *src = (char*)addr;
+    const char *src = (const char*)addr;
     strncpy(dest, src, size - 1);
     dest[size - 1] = '\0';
 }
@@ -88,7 +86,11 @@ void DefaultLog(const char* fmt, ...) {
 // Zapis pojazdów do JSON
 // =============================================
 void SaveVehiclesJSON() {
+#ifdef _WIN32
+    _mkdir("scriptfiles");
+#else
     mkdir("scriptfiles", 0777);
+#endif
 
     std::ofstream file("scriptfiles/vehicles.json");
     if (!file.is_open()) {
@@ -152,13 +154,13 @@ cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params) {
 }
 
 // =============================================
-// Interfejs pluginu
+// Interfejs pluginu (open.mp wymagane PLUGIN_EXPORT)
 // =============================================
-EXPORT unsigned int PLUGIN_CALL Supports() {
+PLUGIN_EXPORT unsigned int PLUGIN_CALL Supports() {
     return SUPPORTS_VERSION | SUPPORTS_AMX_NATIVES;
 }
 
-EXPORT bool PLUGIN_CALL Load(void** ppData) {
+PLUGIN_EXPORT bool PLUGIN_CALL Load(void** ppData) {
     logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
     if (!logprintf) logprintf = DefaultLog;
 
@@ -166,11 +168,14 @@ EXPORT bool PLUGIN_CALL Load(void** ppData) {
     return true;
 }
 
-EXPORT void PLUGIN_CALL Unload() {
+PLUGIN_EXPORT void PLUGIN_CALL Unload() {
     if (logprintf) logprintf(">> CustomVehicles plugin unloaded.");
 }
 
-EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
+PLUGIN_EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
+    if (logprintf)
+        logprintf("[CustomVehicles] AmxLoad called! Registering native...");
+
     static const AMX_NATIVE_INFO natives[] = {
         {"AddVehicleModel", n_AddVehicleModel},
         {nullptr, nullptr}
@@ -183,6 +188,6 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
     return AMX_ERR_NONE;
 }
 
-EXPORT int PLUGIN_CALL AmxUnload(AMX*) {
+PLUGIN_EXPORT int PLUGIN_CALL AmxUnload(AMX*) {
     return AMX_ERR_NONE;
 }
