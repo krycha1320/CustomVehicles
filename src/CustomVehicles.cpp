@@ -35,9 +35,8 @@ typedef void* AMX;
 
 struct AMX_NATIVE_INFO { const char* name; cell (*func)(AMX*, cell*); };
 
-// ====================== GLOBALNE ZMIENNE ======================
+// ====================== GLOBALNE ======================
 void (*logprintf)(const char*, ...) = nullptr;
-void** ppAMXFunctions = nullptr;
 std::vector<AMX*> g_AmxList;
 
 // ====================== LOGOWANIE ======================
@@ -72,30 +71,43 @@ void SaveVehicles() {
 }
 
 void LoadVehicles() {
+#ifdef _WIN32
+    _mkdir("scriptfiles");
+#else
+    mkdir("scriptfiles", 0777);
+#endif
     std::ifstream f("scriptfiles/vehicles.txt");
     if (!f.is_open()) {
-        if (logprintf) logprintf("[CustomVehicles] No vehicles.txt found, skipping load.");
+        if (logprintf) logprintf("[CustomVehicles] No vehicles.txt found, creating empty file.");
+        std::ofstream create("scriptfiles/vehicles.txt");
+        create.close();
         return;
     }
+
     g_Vehicles.clear();
     int b, n;
     std::string d, t;
     while (f >> b >> n >> d >> t)
         g_Vehicles.push_back({b, n, d, t});
     f.close();
-    if (logprintf) logprintf("[CustomVehicles] Loaded %zu vehicles.", g_Vehicles.size());
+
+    if (logprintf) {
+        if (g_Vehicles.empty())
+            logprintf("[CustomVehicles] vehicles.txt loaded but is empty.");
+        else
+            logprintf("[CustomVehicles] Loaded %zu vehicles.", g_Vehicles.size());
+    }
 }
 
-// ====================== NATIVE ======================
+// ====================== NATIVE (opcjonalny) ======================
 cell AMX_NATIVE_CALL n_AddVehicleModel(AMX*, cell* p) {
     int baseid = (int)p[1], newid = (int)p[2];
     const char* dff = (const char*)p[3];
     const char* txd = (const char*)p[4];
 
+    g_Vehicles.push_back({baseid, newid, dff, txd});
     if (logprintf)
         logprintf("[CustomVehicles] AddVehicleModel(%d, %d, %s, %s)", baseid, newid, dff, txd);
-
-    g_Vehicles.push_back({baseid, newid, dff, txd});
     SaveVehicles();
     return 1;
 }
@@ -109,10 +121,19 @@ EXPORT bool PLUGIN_CALL Load(void** ppData) {
     logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
     if (!logprintf) logprintf = DefaultLog;
 
-    ppAMXFunctions = (void**)ppData[PLUGIN_DATA_AMX_EXPORTS];
-
-    logprintf(">> [CustomVehicles] Loaded (no-SDK mode)");
+    logprintf(">> [CustomVehicles] Plugin initializing (auto-load mode)");
     LoadVehicles();
+
+    if (g_Vehicles.empty()) {
+        logprintf("[CustomVehicles] No custom vehicles to register yet.");
+    } else {
+        for (auto& v : g_Vehicles) {
+            logprintf("[CustomVehicles] Auto-loaded: base %d → new %d (%s / %s)",
+                      v.baseid, v.newid, v.dff.c_str(), v.txd.c_str());
+        }
+    }
+
+    logprintf(">> [CustomVehicles] Loaded successfully!");
     return true;
 }
 
@@ -126,7 +147,7 @@ EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
         {nullptr, nullptr}
     };
     g_AmxList.push_back(amx);
-    if (logprintf) logprintf("[CustomVehicles] AmxLoad() -> AddVehicleModel ready.");
+    if (logprintf) logprintf("[CustomVehicles] AmxLoad() – native ready (optional).");
     return AMX_ERR_NONE;
 }
 
