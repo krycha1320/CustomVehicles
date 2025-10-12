@@ -4,9 +4,6 @@
 #include <vector>
 #include <cstdarg>
 #include <sys/stat.h>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
 
 typedef unsigned int cell;
 typedef void* AMX;
@@ -48,7 +45,7 @@ void DefaultLog(const char* fmt, ...)
 }
 
 // ===================================================
-// Pomocnicze funkcje do JSON
+// Zapis pojazdów do prostego pliku tekstowego
 // ===================================================
 void SaveVehicles()
 {
@@ -65,23 +62,18 @@ void SaveVehicles()
         return;
     }
 
-    json j = json::array();
     for (const auto& v : g_Vehicles)
     {
-        j.push_back({
-            {"baseid", v.baseid},
-            {"newid", v.newid},
-            {"dff", v.dff},
-            {"txd", v.txd}
-        });
+        file << v.baseid << " " << v.newid << " "
+             << v.dff << " " << v.txd << "\n";
     }
-
-    file << j.dump(4);
     file.close();
-
-    logprintf("[CustomVehicles] Saved %zu vehicles to scriptfiles/vehicles.json", g_Vehicles.size());
+    logprintf("[CustomVehicles] Saved %zu vehicles (plain text).", g_Vehicles.size());
 }
 
+// ===================================================
+// Wczytanie pojazdów z pliku tekstowego
+// ===================================================
 void LoadVehicles()
 {
     std::ifstream file("scriptfiles/vehicles.json");
@@ -91,33 +83,19 @@ void LoadVehicles()
         return;
     }
 
-    try
+    g_Vehicles.clear();
+
+    int baseid, newid;
+    std::string dff, txd;
+    while (file >> baseid >> newid >> dff >> txd)
     {
-        json j;
-        file >> j;
-        file.close();
-
-        g_Vehicles.clear();
-
-        for (const auto& v : j)
-        {
-            VehicleDef def;
-            def.baseid = v.value("baseid", 0);
-            def.newid = v.value("newid", 0);
-            def.dff = v.value("dff", "");
-            def.txd = v.value("txd", "");
-            g_Vehicles.push_back(def);
-
-            logprintf("[CustomVehicles] Loaded model base %d → new %d (%s / %s)",
-                def.baseid, def.newid, def.dff.c_str(), def.txd.c_str());
-        }
-
-        logprintf("[CustomVehicles] Successfully loaded %zu vehicles from JSON.", g_Vehicles.size());
+        g_Vehicles.push_back({baseid, newid, dff, txd});
+        logprintf("[CustomVehicles] Loaded model base %d → new %d (%s / %s)",
+                  baseid, newid, dff.c_str(), txd.c_str());
     }
-    catch (std::exception& e)
-    {
-        logprintf("[CustomVehicles] ERROR parsing vehicles.json: %s", e.what());
-    }
+
+    logprintf("[CustomVehicles] Successfully loaded %zu vehicles (plain text).", g_Vehicles.size());
+    file.close();
 }
 
 // ===================================================
@@ -133,10 +111,8 @@ cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
     logprintf("[CustomVehicles] AddVehicleModel called! baseid=%d, newid=%d, dff=%s, txd=%s",
               baseid, newid, dff, txd);
 
-    VehicleDef v{baseid, newid, dff, txd};
-    g_Vehicles.push_back(v);
+    g_Vehicles.push_back({baseid, newid, dff, txd});
     SaveVehicles();
-
     return 1;
 }
 
@@ -153,7 +129,7 @@ extern "C" __attribute__((visibility("default"))) bool Load(void** ppData)
     logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
     if (!logprintf) logprintf = DefaultLog;
 
-    logprintf(">> [CustomVehicles] Loaded (legacy-safe mode with JSON support)");
+    logprintf(">> [CustomVehicles] Loaded (plain-text mode)");
     LoadVehicles();
     return true;
 }
