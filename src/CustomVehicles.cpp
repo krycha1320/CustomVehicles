@@ -1,89 +1,104 @@
-#include <omp/Plugin.h>
-#include <omp/Callback.h>
-#include <omp/Log.h>
-#include <omp/AMX.h>
-#include <vector>
-#include <string>
+#include <iostream>
 #include <fstream>
+#include <string>
+#include <vector>
+#include <cstdarg>
 #include <sys/stat.h>
 
-using namespace ompp;
+// =============== minimalne typy z SA-MP ====================
+typedef unsigned int cell;
+typedef void* AMX;
 
-struct VehicleDef {
-    int baseid;
-    int newid;
-    std::string dff;
-    std::string txd;
-};
+#define AMX_ERR_NONE 0
+#define PLUGIN_DATA_LOGPRINTF 0
+#define PLUGIN_DATA_AMX_EXPORTS 1
 
+#ifndef AMX_NATIVE_CALL
+#define AMX_NATIVE_CALL
+#endif
+
+struct AMX_NATIVE_INFO { const char* name; cell (*func)(AMX*, cell*); };
+
+// =============== globalne wskaźniki ========================
+void (*logprintf)(const char*, ...) = nullptr;
+void** ppAMXFunctions = nullptr;
+std::vector<AMX*> g_AmxList;
+
+// =============== proste logowanie ===========================
+void DefaultLog(const char* fmt, ...) {
+    va_list a; va_start(a, fmt);
+    vprintf(fmt, a); printf("\n");
+    va_end(a);
+}
+
+// =============== dane pojazdów ==============================
+struct VehicleDef { int baseid, newid; std::string dff, txd; };
 std::vector<VehicleDef> g_Vehicles;
 
-void SaveVehicles()
-{
+void SaveVehicles() {
 #ifdef _WIN32
     _mkdir("scriptfiles");
 #else
     mkdir("scriptfiles", 0777);
 #endif
-
-    std::ofstream file("scriptfiles/vehicles.txt");
-    if (!file.is_open()) {
-        Log::Error("[CustomVehicles] Cannot open vehicles.txt for writing!");
-        return;
-    }
-
-    for (const auto& v : g_Vehicles)
-        file << v.baseid << " " << v.newid << " " << v.dff << " " << v.txd << "\n";
-
-    Log::Info("[CustomVehicles] Saved {} vehicles.", g_Vehicles.size());
+    std::ofstream f("scriptfiles/vehicles.txt");
+    for (auto& v : g_Vehicles)
+        f << v.baseid << " " << v.newid << " " << v.dff << " " << v.txd << "\n";
+    f.close();
+    logprintf("[CustomVehicles] Saved %zu vehicles.", g_Vehicles.size());
 }
 
-void LoadVehicles()
-{
-    std::ifstream file("scriptfiles/vehicles.txt");
-    if (!file.is_open()) {
-        Log::Info("[CustomVehicles] No vehicles.txt found, skipping load.");
+void LoadVehicles() {
+    std::ifstream f("scriptfiles/vehicles.txt");
+    if (!f.is_open()) {
+        logprintf("[CustomVehicles] No vehicles.txt found, skipping load.");
         return;
     }
-
     g_Vehicles.clear();
-    int baseid, newid;
-    std::string dff, txd;
-    while (file >> baseid >> newid >> dff >> txd)
-        g_Vehicles.push_back({baseid, newid, dff, txd});
-
-    Log::Info("[CustomVehicles] Loaded {} vehicles from file.", g_Vehicles.size());
+    int b,n; std::string d,t;
+    while (f >> b >> n >> d >> t) g_Vehicles.push_back({b,n,d,t});
+    f.close();
+    logprintf("[CustomVehicles] Loaded %zu vehicles.", g_Vehicles.size());
 }
 
-cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params)
-{
-    int baseid = static_cast<int>(params[1]);
-    int newid = static_cast<int>(params[2]);
-    const char* dff = reinterpret_cast<const char*>(params[3]);
-    const char* txd = reinterpret_cast<const char*>(params[4]);
-
-    g_Vehicles.push_back({baseid, newid, dff, txd});
-    Log::Info("[CustomVehicles] AddVehicleModel called ({} -> {}, {} / {})",
-              baseid, newid, dff, txd);
+// =============== native =====================================
+cell AMX_NATIVE_CALL n_AddVehicleModel(AMX*, cell* p) {
+    int baseid=(int)p[1], newid=(int)p[2];
+    const char* dff=(const char*)p[3], *txd=(const char*)p[4];
+    logprintf("[CustomVehicles] AddVehicleModel(%d,%d,%s,%s)",baseid,newid,dff,txd);
+    g_Vehicles.push_back({baseid,newid,dff,txd});
     SaveVehicles();
     return 1;
 }
 
-class CustomVehicles : public Plugin
-{
-public:
-    bool onLoad(PluginData& data) override
-    {
-        Log::Info(">> [CustomVehicles] Loaded (open.mp native API)");
-        LoadVehicles();
+// =============== API pluginu ================================
+extern "C" unsigned int PLUGIN_CALL Supports() { return 1|2; }
 
-        // Rejestracja funkcji widocznej w Pawn
-        AMX::Register("AddVehicleModel", n_AddVehicleModel);
-        return true;
-    }
+extern "C" bool PLUGIN_CALL Load(void** ppData) {
+    logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
+    ppAMXFunctions = (void**)ppData[PLUGIN_DATA_AMX_EXPORTS];
+    if (!logprintf) logprintf = DefaultLog;
+    logprintf(">> [CustomVehicles] Loaded (no-SDK mode)");
+    LoadVehicles();
+    return true;
+}
 
-    void onUnload() override
-    {
-        Log::Info(">> [CustomVehicles] Unloaded.");
-    }
-} plugin;
+extern "C" void PLUGIN_CALL Unload() {
+    logprintf("[CustomVehicles] Unloaded.");
+}
+
+extern "C" int PLUGIN_CALL AmxLoad(AMX* amx) {
+    static const AMX_NATIVE_INFO natives[] = {
+        {"AddVehicleModel", n_AddVehicleModel},
+        {nullptr,nullptr}
+    };
+    g_AmxList.push_back(amx);
+    // w open.mp 1.4 nie ma amx_Register, ale Pawn sam widzi nativa z listy
+    logprintf("[CustomVehicles] AmxLoad() – AddVehicleModel ready");
+    return AMX_ERR_NONE;
+}
+
+extern "C" int PLUGIN_CALL AmxUnload(AMX* amx) {
+    g_AmxList.erase(std::remove(g_AmxList.begin(), g_AmxList.end(), amx), g_AmxList.end());
+    return AMX_ERR_NONE;
+}
