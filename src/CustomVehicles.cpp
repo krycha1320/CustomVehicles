@@ -16,6 +16,10 @@ typedef void* AMX;
 #define PLUGIN_DATA_LOGPRINTF 0
 #define PLUGIN_DATA_AMX_EXPORTS 1
 
+#ifndef AMX_NATIVE_CALL
+    #define AMX_NATIVE_CALL
+#endif
+
 void (*logprintf)(const char*, ...) = nullptr;
 void *pAMXFunctions = nullptr;
 
