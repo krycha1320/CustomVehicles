@@ -2,23 +2,21 @@
 #include <fstream>
 #include <vector>
 #include <string>
-#include <sys/stat.h>
 #include <cstdarg>
+#include <sys/stat.h>
 #include <cstring>
 
 #ifdef _WIN32
     #include <windows.h>
     #include <direct.h>
     #define mkdir(path, mode) _mkdir(path)
-    #define PLUGIN_EXPORT extern "C" __declspec(dllexport)
 #else
     #include <unistd.h>
-    #define PLUGIN_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
 
-// =============================================
+// =============================================================
 // Minimalne definicje AMX / open.mp API
-// =============================================
+// =============================================================
 typedef unsigned int cell;
 typedef void* AMX;
 
@@ -38,15 +36,17 @@ struct AMX_NATIVE_INFO {
     cell (*func)(AMX*, cell*);
 };
 
-// =============================================
-// Wskaźnik funkcji AMX z open.mp
-// =============================================
+// =============================================================
+// Globalne zmienne i funkcje AMX
+// =============================================================
 void *pAMXFunctions = nullptr;
+void (*logprintf)(const char* format, ...) = nullptr;
+
 #define amx_Register ((int (*)(AMX*, const AMX_NATIVE_INFO*, int))(((void**)pAMXFunctions)[12]))
 
-// =============================================
-// Minimalna implementacja amx_GetString
-// =============================================
+// =============================================================
+// Minimalna wersja amx_GetString
+// =============================================================
 static void amx_GetString(char *dest, cell addr, int /*use_wchar*/, size_t size)
 {
     if (!addr || !dest || size == 0) return;
@@ -55,25 +55,9 @@ static void amx_GetString(char *dest, cell addr, int /*use_wchar*/, size_t size)
     dest[size - 1] = '\0';
 }
 
-// =============================================
-// Globalne wskaźniki
-// =============================================
-void (*logprintf)(const char* format, ...) = nullptr;
-
-// =============================================
-// Struktura pojazdu
-// =============================================
-struct VehicleDef {
-    int baseid;
-    int newid;
-    std::string dff;
-    std::string txd;
-};
-std::vector<VehicleDef> g_Vehicles;
-
-// =============================================
-// Logger awaryjny
-// =============================================
+// =============================================================
+// Logger awaryjny (fallback)
+// =============================================================
 void DefaultLog(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -82,9 +66,20 @@ void DefaultLog(const char* fmt, ...) {
     va_end(args);
 }
 
-// =============================================
+// =============================================================
+// Dane o pojazdach
+// =============================================================
+struct VehicleDef {
+    int baseid;
+    int newid;
+    std::string dff;
+    std::string txd;
+};
+std::vector<VehicleDef> g_Vehicles;
+
+// =============================================================
 // Zapis pojazdów do JSON
-// =============================================
+// =============================================================
 void SaveVehiclesJSON() {
 #ifdef _WIN32
     _mkdir("scriptfiles");
@@ -117,16 +112,12 @@ void SaveVehiclesJSON() {
         logprintf("[CustomVehicles] Saved %zu vehicles to scriptfiles/vehicles.json", g_Vehicles.size());
 }
 
-// =============================================
-// Dodawanie modelu pojazdu
-// =============================================
+// =============================================================
+// Główna funkcja dodawania pojazdu
+// =============================================================
 cell AddVehicleModel_Internal(int baseid, int newid, const char* dff, const char* txd) {
     if (!dff || !txd) {
         if (logprintf) logprintf("[CustomVehicles] ERROR: Missing DFF or TXD name!");
-        return 0;
-    }
-    if (newid < 20000) {
-        if (logprintf) logprintf("[CustomVehicles] ERROR: Invalid new ID (%d)", newid);
         return 0;
     }
 
@@ -135,13 +126,14 @@ cell AddVehicleModel_Internal(int baseid, int newid, const char* dff, const char
     SaveVehiclesJSON();
 
     if (logprintf)
-        logprintf("[CustomVehicles] Added model: base %d → new %d (%s / %s)", baseid, newid, dff, txd);
+        logprintf("[CustomVehicles] Added vehicle model: base %d → new %d (%s / %s)",
+                  baseid, newid, dff, txd);
     return 1;
 }
 
-// =============================================
+// =============================================================
 // Pawn native: AddVehicleModel(baseid, newid, dff[], txd[])
-// =============================================
+// =============================================================
 cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params) {
     int baseid = (int)params[1];
     int newid  = (int)params[2];
@@ -153,28 +145,27 @@ cell AMX_NATIVE_CALL n_AddVehicleModel(AMX* amx, cell* params) {
     return AddVehicleModel_Internal(baseid, newid, dff, txd);
 }
 
-// =============================================
-// Interfejs pluginu (open.mp wymagane PLUGIN_EXPORT)
-// =============================================
-PLUGIN_EXPORT unsigned int PLUGIN_CALL Supports() {
+// =============================================================
+// INTERFEJS PLUGINU (open.mp / SA:MP kompatybilny)
+// =============================================================
+extern "C" __attribute__((visibility("default"))) unsigned int Supports() {
     return SUPPORTS_VERSION | SUPPORTS_AMX_NATIVES;
 }
 
-PLUGIN_EXPORT bool PLUGIN_CALL Load(void** ppData) {
+extern "C" __attribute__((visibility("default"))) bool Load(void **ppData) {
     logprintf = (void(*)(const char*, ...))ppData[PLUGIN_DATA_LOGPRINTF];
     if (!logprintf) logprintf = DefaultLog;
 
-    logprintf(">> CustomVehicles plugin loaded successfully!");
+    logprintf(">> [CustomVehicles] Load() called - plugin initialized!");
     return true;
 }
 
-PLUGIN_EXPORT void PLUGIN_CALL Unload() {
-    if (logprintf) logprintf(">> CustomVehicles plugin unloaded.");
+extern "C" __attribute__((visibility("default"))) void Unload() {
+    if (logprintf) logprintf(">> [CustomVehicles] Unload() called - plugin shutting down!");
 }
 
-PLUGIN_EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
-    if (logprintf)
-        logprintf("[CustomVehicles] AmxLoad called! Registering native...");
+extern "C" __attribute__((visibility("default"))) int AmxLoad(AMX *amx) {
+    if (logprintf) logprintf("[CustomVehicles] AmxLoad() called - registering natives...");
 
     static const AMX_NATIVE_INFO natives[] = {
         {"AddVehicleModel", n_AddVehicleModel},
@@ -183,11 +174,11 @@ PLUGIN_EXPORT int PLUGIN_CALL AmxLoad(AMX* amx) {
 
     amx_Register(amx, natives, -1);
 
-    if (logprintf)
-        logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
+    if (logprintf) logprintf("[CustomVehicles] Registered Pawn native: AddVehicleModel");
     return AMX_ERR_NONE;
 }
 
-PLUGIN_EXPORT int PLUGIN_CALL AmxUnload(AMX*) {
+extern "C" __attribute__((visibility("default"))) int AmxUnload(AMX *amx) {
+    if (logprintf) logprintf("[CustomVehicles] AmxUnload() called!");
     return AMX_ERR_NONE;
 }
